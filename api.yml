@@ -1,0 +1,62 @@
+#versione api
+openapi: 3.0.1
+#varie info descrittive
+info:
+  title: SendMessageAPI
+  version: 1.0
+#validator per utilizzare il parametro required nello schema
+x-amazon-apigateway-request-validators:
+  RequestModelPayload:
+    validateRequestParameters: true
+    validateRequestBody: true
+paths:
+  /messages:
+    post:
+      summary: Invia un messaggio alla coda
+      responses:
+        '200':
+          description: Messaggio inviato con successo
+        '404':
+          description: Messaggio non trovato
+        default: Errore generico
+      #altra riga da aggiungere per il validator (vedi riga 7)
+      x-amazon-apigateway-request-validator: "RequestModelPayload"
+      requestBody: 
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/sendMessageSchema'
+      x-amazon-apigateway-integration:
+        type: "aws"
+        httpMethod: POST
+        responses:
+          default:
+            statusCode: 200
+        uri:
+          #MAI utilizzare ! nella configurazione dell'API 
+          Fn::Sub:
+            - "arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${QueueName}"
+            - QueueName: { 'Fn::GetAtt': [ MessageQueue, QueueName ] }
+        credentials: { 'Fn::GetAtt': [SQSRole, Arn] }
+        passthroughBehavior: WHEN_NO_MATCH
+        requestParameters:
+          integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
+        requestTemplates:
+          application/json: Action=SendMessage&MessageBody=$util.escapeJavaScript($input.body).replaceAll('\\"','"').replaceAll('\\r','').replaceAll('\\n','')
+components:
+  schemas:
+    sendMessageSchema:
+      type: object
+      #valori richiesti che saranno controllati se presente il validator
+      required: 
+        - val1
+        - val2
+      #nome e tipo dei valori
+      properties:
+        val1:
+          type: number
+        val2:
+          type: number
+      #blocco della richiesta se inseriti più dati di quelli inseriti in properties
+      additionalProperties: false

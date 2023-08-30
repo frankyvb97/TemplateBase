@@ -9,12 +9,13 @@ Globals:
     Timeout: 3
 
 Resources:
+  #Esempio di funzione
   HelloWorldFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
-      Handler: app.lambdaHandler
-      Runtime: nodejs18.x
+      CodeUri: src/ #percorso predefinito e consigliato
+      Handler: app.lambdaHandler #app.nomeFunzione
+      Runtime: nodejs18.x #linguaggio da utilizzare (utilizzare sempre nodejsxx)
       Architectures:
       - x86_64
       Events:
@@ -23,3 +24,47 @@ Resources:
           Properties:
             Path: /hello
             Method: get
+
+MessageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MessageQueue
+      RedrivePolicy:
+        #collegare una DLQ
+        deadLetterTargetArn : !GetAtt MessageQueueDLQ.Arn
+        maxReceiveCount: 3
+
+MessageQueueDLQ:
+  Type: AWS::SQS::Queue
+
+SQSRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+      - Effect: Allow
+        Principal:
+          Service:
+          - apigateway.amazonaws.com
+        Action: "sts:AssumeRole"
+    Policies:
+    - PolicyName: SQSPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage #è necessaria solo questa azione (meno permessi si danno, meglio è)
+          Resource: !GetAtt MessageQueue.Arn
+
+SendMessageAPI:
+  Type: AWS::Serverless::Api #utilizzare openapi 3.0.1
+  Properties:
+    StageName: dev
+    Name: SendMessageAPI
+    DefinitionBody:
+      Fn::Transform:
+        Name: AWS::Include #necessario per utilizzare un file YAML esterno
+        Parameters:
+          Location: api.yml
